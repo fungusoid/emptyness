@@ -6,7 +6,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import './App.css'
 
 function App() {
-  const [mode, setMode] = useState(0) // 0: Word List, 1: Quiz
+  const [mode, setMode] = useState(0) // 0: Word List, 1: Quiz, 2: Bulk Add
   const [words, setWords] = useState([])
   const [original, setOriginal] = useState('')
   const [translation, setTranslation] = useState('')
@@ -17,6 +17,8 @@ function App() {
   const [quizChecked, setQuizChecked] = useState(false)
   const [quizResult, setQuizResult] = useState(null)
   const [quizType, setQuizType] = useState('original-to-translation')
+  const [bulkText, setBulkText] = useState('')
+  const [bulkResult, setBulkResult] = useState(null)
 
   // Fetch words from backend
   useEffect(() => {
@@ -108,12 +110,45 @@ function App() {
     }
   }
 
+  // Bulk add handler
+  const handleBulkAdd = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setBulkResult(null)
+    const lines = bulkText.split('\n').map(line => line.trim()).filter(Boolean)
+    const words = lines.map(line => {
+      const [original, translation] = line.split(':').map(s => s?.trim())
+      return original && translation ? { original, translation } : null
+    }).filter(Boolean)
+    if (words.length === 0) {
+      setError('No valid word pairs found.')
+      setLoading(false)
+      return
+    }
+    const res = await fetch('/api/words/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ words })
+    })
+    if (res.ok) {
+      setBulkResult(`${words.length} words added!`)
+      setBulkText('')
+      // Optionally refetch words
+      fetch('/api/words').then(res => res.json()).then(setWords)
+    } else {
+      setError('Failed to add words')
+    }
+    setLoading(false)
+  }
+
   return (
     <Container maxWidth="md" sx={{ mt: 0, px: 0 }}>
       <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', p: 0, m: 0 }}>
         <Tabs value={mode} onChange={(_, v) => setMode(v)} sx={{ mt: 0, mb: 4, width: '100%', maxWidth: 500, p: 0, m: 0 }} centered>
           <Tab label="Word List" />
           <Tab label="Quiz" />
+          <Tab label="Bulk Add" />
         </Tabs>
       </Box>
       {mode === 0 && (
@@ -237,6 +272,29 @@ function App() {
               </form>
             )}
           </Box>
+        </Box>
+      )}
+      {mode === 2 && (
+        <Box sx={{ width: '100%', mt: 0 }}>
+          <Box sx={{ height: 32 }} />
+          <Typography variant="h4" gutterBottom>Bulk Add Words</Typography>
+          <form onSubmit={handleBulkAdd}>
+            <TextField
+              label="Paste words here (one per line: original:translation)"
+              multiline
+              minRows={8}
+              value={bulkText}
+              onChange={e => setBulkText(e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+            />
+            <Button type="submit" variant="contained" color="primary" disabled={loading}>
+              Add Words
+            </Button>
+            {loading && <CircularProgress size={24} sx={{ ml: 2 }} />}
+          </form>
+          {bulkResult && <Alert severity="success" sx={{ mt: 2 }}>{bulkResult}</Alert>}
+          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
         </Box>
       )}
     </Container>

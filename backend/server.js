@@ -41,6 +41,25 @@ app.post('/api/words', (req, res) => {
   );
 });
 
+// Bulk add words
+app.post('/api/words/bulk', (req, res) => {
+  const { words } = req.body;
+  if (!Array.isArray(words) || words.length === 0) return res.status(400).json({ error: 'No words provided' });
+  const stmt = db.prepare('INSERT INTO words (original, translation, date_added) VALUES (?, ?, ?)');
+  const date_added = new Date().toISOString();
+  db.serialize(() => {
+    words.forEach(({ original, translation }) => {
+      if (original && translation) {
+        stmt.run(original, translation, date_added);
+      }
+    });
+    stmt.finalize(err => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, count: words.length });
+    });
+  });
+});
+
 // Get all words (alphabetical)
 app.get('/api/words', (req, res) => {
   db.all('SELECT * FROM words ORDER BY original ASC', [], (err, rows) => {
