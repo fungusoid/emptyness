@@ -47,15 +47,24 @@ app.post('/api/words/bulk', (req, res) => {
   if (!Array.isArray(words) || words.length === 0) return res.status(400).json({ error: 'No words provided' });
   const stmt = db.prepare('INSERT INTO words (original, translation, date_added) VALUES (?, ?, ?)');
   const date_added = new Date().toISOString();
+  let insertedCount = 0;
   db.serialize(() => {
     words.forEach(({ original, translation }) => {
       if (original && translation) {
         stmt.run(original, translation, date_added);
+        insertedCount++;
       }
     });
     stmt.finalize(err => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, count: words.length });
+      res.json({ success: true, count: insertedCount });
+    });
+  });
+      }
+      db.run('COMMIT', commitErr => {
+        if (commitErr) return res.status(500).json({ error: commitErr.message });
+        res.json({ success: true, count: words.length });
+      });
     });
   });
 });
