@@ -45,27 +45,31 @@ app.post('/api/words', (req, res) => {
 app.post('/api/words/bulk', (req, res) => {
   const { words } = req.body;
   if (!Array.isArray(words) || words.length === 0) return res.status(400).json({ error: 'No words provided' });
-  const stmt = db.prepare('INSERT INTO words (original, translation, date_added) VALUES (?, ?, ?)');
+  
   const date_added = new Date().toISOString();
   let insertedCount = 0;
-  db.serialize(() => {
-    words.forEach(({ original, translation }) => {
-      if (original && translation) {
-        stmt.run(original, translation, date_added);
-        insertedCount++;
+  let completed = 0;
+  
+  words.forEach(({ original, translation }) => {
+    if (original && translation) {
+      db.run(
+        'INSERT INTO words (original, translation, date_added) VALUES (?, ?, ?)',
+        [original, translation, date_added],
+        function (err) {
+          completed++;
+          if (!err) insertedCount++;
+          
+          if (completed === words.length) {
+            res.json({ success: true, count: insertedCount });
+          }
+        }
+      );
+    } else {
+      completed++;
+      if (completed === words.length) {
+        res.json({ success: true, count: insertedCount });
       }
-    });
-    stmt.finalize(err => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, count: insertedCount });
-    });
-  });
-      }
-      db.run('COMMIT', commitErr => {
-        if (commitErr) return res.status(500).json({ error: commitErr.message });
-        res.json({ success: true, count: words.length });
-      });
-    });
+    }
   });
 });
 
